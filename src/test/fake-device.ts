@@ -68,7 +68,8 @@ export class FakeDevice {
     if (this.options.transport === 'tcp') {
       this.tcp = createServer((conn) => {
         let buf = Buffer.alloc(0);
-        conn.on('data', (chunk) => {
+        // No encoding is set on the socket, so chunks are always Buffers.
+        conn.on('data', (chunk: Buffer) => {
           buf = Buffer.concat([buf, chunk]);
           while (buf.length >= 2 && buf.length >= 2 + buf.readUInt16LE(0)) {
             const msg = buf.subarray(2, 2 + buf.readUInt16LE(0));
