@@ -1,0 +1,190 @@
+{
+  "pluginAlias": "RabbitAirLocal",
+  "pluginType": "platform",
+  "singular": true,
+  "customUi": true,
+  "customUiPath": "./dist/homebridge-ui",
+  "strictValidation": true,
+  "headerDisplay": "Control Rabbit Air purifiers over your local network. Find each purifier's user key in the Rabbit Air app: in the Rabbit Air 2 app, open the purifier, tap the three-dot menu, choose \"Rename\" and tap the device name. In the older app, tap \"Edit\" on the purifier and tap \"Serial Number\" several times.",
+  "footerDisplay": "Unconfigured purifiers found on the network are listed in the Homebridge log with their MAC address.",
+  "schema": {
+    "type": "object",
+    "properties": {
+      "name": {
+        "title": "Platform Name",
+        "type": "string",
+        "default": "Rabbit Air"
+      },
+      "devices": {
+        "title": "Purifiers",
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "title": "Name",
+              "type": "string",
+              "required": true,
+              "placeholder": "Living Room Purifier"
+            },
+            "token": {
+              "title": "User Key",
+              "type": "string",
+              "required": true,
+              "pattern": "^[0-9a-fA-F]{32}$",
+              "description": "The 32 character user key from the Rabbit Air app."
+            },
+            "mac": {
+              "title": "MAC Address",
+              "type": "string",
+              "pattern": "^([0-9a-fA-F]{2}[:-]?){5}[0-9a-fA-F]{2}$",
+              "description": "Recommended. Used to find the purifier and to follow it when its IP address changes. Logged by the plugin for unconfigured purifiers."
+            },
+            "host": {
+              "title": "Host",
+              "type": "string",
+              "description": "IP address or hostname. Optional when the MAC address is set."
+            },
+            "transport": {
+              "title": "Transport",
+              "type": "string",
+              "default": "udp",
+              "oneOf": [
+                {
+                  "title": "UDP (recommended)",
+                  "enum": [
+                    "udp"
+                  ]
+                },
+                {
+                  "title": "TCP",
+                  "enum": [
+                    "tcp"
+                  ]
+                }
+              ]
+            },
+            "airQualitySensor": {
+              "title": "Air quality sensor",
+              "type": "boolean",
+              "default": true
+            },
+            "filterMaintenance": {
+              "title": "Filter life and reset",
+              "type": "boolean",
+              "default": true
+            },
+            "pollenModeSwitch": {
+              "title": "Pollen mode switch",
+              "type": "boolean",
+              "default": true
+            },
+            "ionizerSwitch": {
+              "title": "Ionizer switch",
+              "type": "boolean",
+              "default": true
+            },
+            "moodLightSwitch": {
+              "title": "Mood light switch",
+              "type": "boolean",
+              "default": true
+            },
+            "displayLightsSwitch": {
+              "title": "Display lights switch",
+              "type": "boolean",
+              "default": true
+            },
+            "childLock": {
+              "title": "Child lock (models that report it)",
+              "type": "boolean",
+              "default": true
+            }
+          }
+        }
+      },
+      "pollInterval": {
+        "title": "Poll Interval (seconds)",
+        "type": "integer",
+        "default": 15,
+        "minimum": 5,
+        "description": "How often to read each purifier's state in the background. HomeKit reads are answered from this cached state."
+      },
+      "discovery": {
+        "title": "Discovery",
+        "type": "boolean",
+        "default": true,
+        "description": "Find purifiers with mDNS and follow IP address changes."
+      },
+      "airQualityScale": {
+        "title": "Air Quality Scale",
+        "type": "string",
+        "default": "higherIsBetter",
+        "oneOf": [
+          {
+            "title": "Higher value means cleaner air",
+            "enum": [
+              "higherIsBetter"
+            ]
+          },
+          {
+            "title": "Higher value means dirtier air",
+            "enum": [
+              "higherIsWorse"
+            ]
+          }
+        ],
+        "description": "The protocol does not document which way the air quality value runs. Switch this if HomeKit disagrees with the light on the purifier."
+      }
+    }
+  },
+  "layout": [
+    {
+      "key": "devices",
+      "type": "array",
+      "orderable": false,
+      "buttonText": "Add Purifier",
+      "items": [
+        "devices[].name",
+        "devices[].token",
+        "devices[].mac",
+        "devices[].host",
+        {
+          "type": "fieldset",
+          "title": "HomeKit Services",
+          "expandable": true,
+          "expanded": false,
+          "items": [
+            "devices[].airQualitySensor",
+            "devices[].filterMaintenance",
+            "devices[].pollenModeSwitch",
+            "devices[].ionizerSwitch",
+            "devices[].moodLightSwitch",
+            "devices[].displayLightsSwitch",
+            "devices[].childLock"
+          ]
+        },
+        {
+          "type": "fieldset",
+          "title": "Connection",
+          "expandable": true,
+          "expanded": false,
+          "items": [
+            "devices[].transport"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "fieldset",
+      "title": "Advanced",
+      "expandable": true,
+      "expanded": false,
+      "items": [
+        "name",
+        "pollInterval",
+        "discovery",
+        "airQualityScale"
+      ]
+    }
+  ]
+}

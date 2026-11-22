@@ -1,0 +1,10 @@
+homebridge-rabbitair
+Copyright 2026 Jose Diaz-Gonzalez
+
+This product implements the Rabbit Air local network protocol as described by
+python-rabbitair (https://github.com/rabbit-air/python-rabbitair), which is
+licensed under the Apache License, Version 2.0. No code from python-rabbitair is
+included.
+
+Rabbit Air, MinusA2 and A3 are trademarks of their respective owners. This
+project is not affiliated with or endorsed by Rabbit Air.

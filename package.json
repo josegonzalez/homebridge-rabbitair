@@ -1,0 +1,68 @@
+{
+  "name": "@josediazgonzalez/homebridge-rabbitair",
+  "displayName": "Rabbit Air",
+  "version": "0.1.0",
+  "description": "Homebridge plugin and standalone SDK for Rabbit Air air purifiers over the local network",
+  "license": "Apache-2.0",
+  "author": "Jose Diaz-Gonzalez",
+  "homepage": "https://github.com/josegonzalez/homebridge-rabbitair#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/josegonzalez/homebridge-rabbitair.git"
+  },
+  "bugs": {
+    "url": "https://github.com/josegonzalez/homebridge-rabbitair/issues"
+  },
+  "keywords": [
+    "homebridge-plugin",
+    "homekit",
+    "rabbitair",
+    "rabbit-air",
+    "air-purifier",
+    "minusa2",
+    "a3"
+  ],
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./sdk": {
+      "types": "./dist/sdk/index.d.ts",
+      "default": "./dist/sdk/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "!dist/**/*.test.*",
+    "!dist/test",
+    "config.schema.json",
+    "LICENSE",
+    "NOTICE",
+    "README.md"
+  ],
+  "engines": {
+    "homebridge": "^1.8.0 || ^2.0.0",
+    "node": "^22.12.0 || ^24 || ^26"
+  },
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "test": "npm run build && node --test \"dist/**/*.test.js\"",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "prepare": "node scripts/build.mjs",
+    "prepublishOnly": "npm test"
+  },
+  "devDependencies": {
+    "@homebridge/hap-nodejs": "^2.3.0",
+    "@types/node": "^22.0.0",
+    "homebridge": "^2.5.0",
+    "typescript": "^5.9.0"
+  },
+  "dependencies": {
+    "@homebridge/plugin-ui-utils": "^2.3.0"
+  }
+}

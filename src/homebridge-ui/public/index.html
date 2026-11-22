@@ -1,0 +1,252 @@
+<!--
+  Custom settings page for the Rabbit Air plugin. The Homebridge UI provides
+  the `homebridge` global and Bootstrap styles. Everything that comes from the
+  network is inserted with textContent, never as HTML.
+-->
+<style>
+  .ra-device { border: 1px solid var(--bs-border-color, #dee2e6); border-radius: 0.5rem; padding: 0.75rem 1rem; margin-bottom: 0.75rem; }
+  .ra-device header { display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+  .ra-meta { font-size: 0.85rem; opacity: 0.8; word-break: break-all; }
+  .ra-form { margin-top: 0.75rem; }
+  .ra-help { font-size: 0.85rem; }
+  .ra-help ol { padding-left: 1.25rem; margin-bottom: 0.5rem; }
+</style>
+
+<div id="ra-app">
+  <div class="d-flex justify-content-between align-items-center mb-2">
+    <h5 class="mb-0">Purifiers</h5>
+    <button type="button" class="btn btn-primary btn-sm" id="ra-scan">Search the network</button>
+  </div>
+  <p class="ra-meta" id="ra-status">Search the network to find purifiers that are not set up yet.</p>
+  <div id="ra-list"></div>
+
+  <details class="ra-help mb-3">
+    <summary>Where to find the user key</summary>
+    <p class="mt-2 mb-1"><strong>Rabbit Air 2 app</strong></p>
+    <ol>
+      <li>Tap the purifier to open its control page.</li>
+      <li>Open the three-dot menu in the top right and choose "Rename".</li>
+      <li>Tap the device name to reveal the Thing ID and User key.</li>
+    </ol>
+    <p class="mb-1"><strong>Older Rabbit Air app</strong></p>
+    <ol>
+      <li>Tap the purifier to open its control page, then tap "Edit".</li>
+      <li>Quickly tap "Serial Number" several times until the device ID and user key appear.</li>
+      <li>If you see "Tap for setup user key", tap it and follow the prompts.</li>
+    </ol>
+  </details>
+
+  <h5>Settings</h5>
+</div>
+
+<template id="ra-repair">
+  <div class="alert alert-warning ra-help mt-2 mb-0" role="alert">
+    <p class="mb-1"><strong>The purifier did not accept that key.</strong></p>
+    <p class="mb-1">
+      Check that the Thing ID in the app matches the one shown here. If it matches and the key is copied correctly, the key
+      saved on the purifier is probably out of date. Re-pair it in the app:
+    </p>
+    <ol class="mb-1">
+      <li>Remove the purifier from the app.</li>
+      <li>Add it again and finish the Wi-Fi setup.</li>
+      <li>Open the Thing ID and user key again. Both will have changed.</li>
+    </ol>
+    <p class="mb-0">Then search the network again and enter the new key. If the app says the purifier is not supported, it may be a first generation MinusA2.</p>
+  </div>
+</template>
+
+<script>
+  (async () => {
+    const PLATFORM = 'RabbitAirLocal';
+    const $ = (id) => document.getElementById(id);
+    const el = (tag, attrs = {}, ...children) => {
+      const node = document.createElement(tag);
+      for (const [k, v] of Object.entries(attrs)) {
+        if (k === 'class') node.className = v;
+        else if (k.startsWith('on')) node.addEventListener(k.slice(2), v);
+        else node.setAttribute(k, v);
+      }
+      for (const c of children) node.append(c instanceof Node ? c : document.createTextNode(String(c)));
+      return node;
+    };
+    const normalizeMac = (mac) => String(mac || '').replace(/[^0-9a-fA-F]/g, '').toUpperCase();
+
+    let discovered = [];
+
+    async function loadConfig() {
+      const blocks = await homebridge.getPluginConfig();
+      if (blocks.length === 0) {
+        blocks.push({ platform: PLATFORM, name: 'Rabbit Air', devices: [] });
+      }
+      blocks[0].devices = blocks[0].devices || [];
+      return blocks;
+    }
+
+    async function saveDevice(device) {
+      const blocks = await loadConfig();
+      const devices = blocks[0].devices;
+      const mac = normalizeMac(device.mac);
+      const index = devices.findIndex((d) => (mac && normalizeMac(d.mac) === mac) || (!d.mac && d.host === device.host));
+      if (index === -1) devices.push(device);
+      else devices[index] = { ...devices[index], ...device };
+      await homebridge.updatePluginConfig(blocks);
+      await homebridge.savePluginConfig();
+      homebridge.toast.success(`${device.name} saved. Restart Homebridge (or the child bridge) to apply.`, 'Rabbit Air');
+    }
+
+    function keyForm({ name, host, thingId, mac, existing }) {
+      const form = el('form', { class: 'ra-form' });
+      const nameInput = el('input', { class: 'form-control form-control-sm', required: '', value: name || '' });
+      const keyInput = el('input', {
+        class: 'form-control form-control-sm font-monospace',
+        required: '',
+        autocomplete: 'off',
+        spellcheck: 'false',
+        placeholder: '32 character user key',
+        pattern: '[0-9a-fA-F]{32}',
+      });
+      const feedback = el('div');
+      const submit = el('button', { type: 'submit', class: 'btn btn-primary btn-sm' }, existing ? 'Check and update key' : 'Check and add');
+
+      form.append(
+        el('p', { class: 'ra-help mb-2' }, 'The app should show Thing ID ', el('code', {}, thingId || 'unknown'), ' for this purifier.'),
+        el('div', { class: 'mb-2' }, el('label', { class: 'form-label mb-1' }, 'Name'), nameInput),
+        el('div', { class: 'mb-2' }, el('label', { class: 'form-label mb-1' }, 'User key'), keyInput),
+        submit,
+        feedback,
+      );
+
+      form.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        feedback.replaceChildren();
+        submit.disabled = true;
+        homebridge.showSpinner();
+        try {
+          const token = keyInput.value.trim();
+          const result = await homebridge.request('/verify', { host, token });
+          if (mac && result.mac && normalizeMac(result.mac) !== normalizeMac(mac)) {
+            throw new Error(`The device at ${host} reported MAC ${result.mac}, expected ${mac}.`);
+          }
+          await saveDevice({ name: nameInput.value.trim(), token, mac: result.mac || mac, host });
+          await render();
+        } catch (err) {
+          const code = err && err.error && err.error.code;
+          if (code === 'rejected') {
+            feedback.append($('ra-repair').content.cloneNode(true));
+          } else {
+            feedback.append(el('div', { class: 'alert alert-danger mt-2 mb-0' }, (err && err.message) || String(err)));
+          }
+        } finally {
+          submit.disabled = false;
+          homebridge.hideSpinner();
+        }
+      });
+      return form;
+    }
+
+    function card({ title, subtitle, badge, badgeClass, actions, body }) {
+      return el(
+        'div',
+        { class: 'ra-device' },
+        el('header', {}, el('div', {}, el('strong', {}, title), ' ', el('span', { class: `badge ${badgeClass}` }, badge)), el('div', {}, ...actions)),
+        el('div', { class: 'ra-meta' }, subtitle),
+        body || '',
+      );
+    }
+
+    async function render() {
+      const blocks = await loadConfig();
+      const configured = blocks[0].devices;
+      const list = $('ra-list');
+      list.replaceChildren();
+
+      const matched = new Set();
+      for (const device of configured) {
+        const mac = normalizeMac(device.mac);
+        const found = discovered.find((d) => (mac && d.mac === mac) || d.address === device.host);
+        if (found) matched.add(found.mac || found.address);
+        const host = (found && found.address) || device.host || '';
+        const slot = el('div');
+        const check = el('button', { type: 'button', class: 'btn btn-outline-secondary btn-sm' }, 'Check key');
+        check.addEventListener('click', async () => {
+          slot.replaceChildren();
+          homebridge.showSpinner();
+          try {
+            const result = await homebridge.request('/verify', { host, token: device.token, transport: device.transport });
+            homebridge.toast.success(`${device.name} accepts its key (${result.model || 'Rabbit Air'}, firmware ${result.firmware || 'unknown'}).`);
+            if (found && device.host !== found.address) {
+              await saveDevice({ ...device, host: found.address });
+              await render();
+            }
+          } catch (err) {
+            const code = err && err.error && err.error.code;
+            if (code === 'rejected') {
+              slot.append($('ra-repair').content.cloneNode(true));
+              slot.append(keyForm({ name: device.name, host, thingId: found && found.thingId, mac: device.mac, existing: true }));
+            } else {
+              slot.append(el('div', { class: 'alert alert-danger mt-2 mb-0' }, (err && err.message) || String(err)));
+            }
+          } finally {
+            homebridge.hideSpinner();
+          }
+        });
+        const status = found ? ['On the network', 'bg-success'] : discovered.length ? ['Not found', 'bg-secondary'] : ['Saved', 'bg-secondary'];
+        list.append(
+          card({
+            title: device.name || '(unnamed)',
+            subtitle: [host, mac && `MAC ${mac}`, found && `Thing ID ${found.thingId}`].filter(Boolean).join(' · '),
+            badge: status[0],
+            badgeClass: status[1],
+            actions: host ? [check] : [],
+            body: slot,
+          }),
+        );
+      }
+
+      for (const d of discovered) {
+        if (matched.has(d.mac || d.address)) continue;
+        const slot = el('div');
+        const add = el('button', { type: 'button', class: 'btn btn-success btn-sm' }, 'Set up');
+        add.addEventListener('click', () => {
+          slot.replaceChildren(keyForm({ name: '', host: d.address, thingId: d.thingId, mac: d.mac }));
+          add.remove();
+        });
+        list.append(
+          card({
+            title: 'New purifier',
+            subtitle: [d.address, d.mac && `MAC ${d.mac}`, `Thing ID ${d.thingId}`].join(' · '),
+            badge: 'Not set up',
+            badgeClass: 'bg-warning text-dark',
+            actions: [add],
+            body: slot,
+          }),
+        );
+      }
+
+      if (configured.length === 0 && discovered.length === 0) {
+        list.append(el('p', { class: 'ra-meta' }, 'No purifiers saved yet.'));
+      }
+      homebridge.fixScrollHeight();
+    }
+
+    $('ra-scan').addEventListener('click', async () => {
+      const button = $('ra-scan');
+      button.disabled = true;
+      $('ra-status').textContent = 'Searching...';
+      try {
+        discovered = await homebridge.request('/discover');
+        $('ra-status').textContent = discovered.length
+          ? `Found ${discovered.length} purifier(s).`
+          : 'No purifiers found. Homebridge must be on the same network as the purifiers.';
+        await render();
+      } catch (err) {
+        $('ra-status').textContent = `Search failed: ${(err && err.message) || err}`;
+      } finally {
+        button.disabled = false;
+      }
+    });
+
+    await render();
+    homebridge.showSchemaForm();
+  })();
+</script>
