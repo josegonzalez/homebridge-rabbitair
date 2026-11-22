@@ -58,9 +58,9 @@
   },
   "devDependencies": {
     "@homebridge/hap-nodejs": "^2.3.0",
-    "@types/node": "^22.0.0",
+    "@types/node": "^26.6.6",
     "homebridge": "^2.5.0",
-    "typescript": "^5.9.0"
+    "typescript": "^7.0.2"
   },
   "dependencies": {
     "@homebridge/plugin-ui-utils": "^2.3.0"
