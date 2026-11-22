@@ -24,15 +24,14 @@
             "name": {
               "title": "Name",
               "type": "string",
-              "required": true,
-              "placeholder": "Living Room Purifier"
+              "placeholder": "Living Room Purifier",
+              "description": "Required. Name shown in HomeKit."
             },
             "token": {
               "title": "User Key",
               "type": "string",
-              "required": true,
               "pattern": "^[0-9a-fA-F]{32}$",
-              "description": "The 32 character user key from the Rabbit Air app."
+              "description": "Required. The 32 character user key from the Rabbit Air app."
             },
             "mac": {
               "title": "MAC Address",
@@ -139,37 +138,29 @@
   },
   "layout": [
     {
-      "key": "devices",
-      "type": "array",
-      "listItems": 0,
-      "orderable": false,
-      "buttonText": "Add Purifier",
+      "type": "fieldset",
+      "title": "Purifiers (manual setup)",
+      "expandable": true,
+      "expanded": false,
       "items": [
-        "devices[].name",
-        "devices[].token",
-        "devices[].mac",
-        "devices[].host",
         {
-          "type": "fieldset",
-          "title": "HomeKit Services",
-          "expandable": true,
-          "expanded": false,
+          "key": "devices",
+          "type": "array",
+          "listItems": 0,
+          "orderable": false,
+          "buttonText": "Add Purifier",
           "items": [
+            "devices[].name",
+            "devices[].token",
+            "devices[].mac",
+            "devices[].host",
             "devices[].airQualitySensor",
             "devices[].filterMaintenance",
             "devices[].pollenModeSwitch",
             "devices[].ionizerSwitch",
             "devices[].moodLightSwitch",
             "devices[].displayLightsSwitch",
-            "devices[].childLock"
-          ]
-        },
-        {
-          "type": "fieldset",
-          "title": "Connection",
-          "expandable": true,
-          "expanded": false,
-          "items": [
+            "devices[].childLock",
             "devices[].transport"
           ]
         }
