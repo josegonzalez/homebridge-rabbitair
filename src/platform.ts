@@ -4,6 +4,7 @@ import { PurifierAccessory, type AccessoryContext } from './accessory.js';
 import { discover, normalizeMac, parseToken, RabbitAirClient, type DiscoveredDevice } from './sdk/index.js';
 import {
   DEFAULT_POLL_INTERVAL,
+  isBlankDevice,
   MIN_POLL_INTERVAL,
   PLATFORM_NAME,
   PLUGIN_NAME,
@@ -117,8 +118,12 @@ export class RabbitAirPlatform implements DynamicPlatformPlugin {
     const out: DeviceConfig[] = [];
     const seen = new Set<string>();
     for (const [i, device] of (this.config.devices ?? []).entries()) {
-      const label = device?.name || `device ${i + 1}`;
-      if (!device?.name) {
+      if (isBlankDevice(device)) {
+        this.log.debug(`ignoring empty purifier entry ${i + 1}`);
+        continue;
+      }
+      const label = device.name || `device ${i + 1}`;
+      if (!device.name) {
         this.log.error(`${label}: "name" is required`);
         continue;
       }

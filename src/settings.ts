@@ -34,5 +34,13 @@ export interface RabbitAirPlatformConfig extends PlatformConfig {
   airQualityScale?: AirQualityScale;
 }
 
+/**
+ * Whether a device entry is an empty row, such as the one the Homebridge
+ * settings form adds to an empty list. These only hold the form's defaults.
+ */
+export function isBlankDevice(device: Partial<DeviceConfig> | null | undefined): boolean {
+  return !device || ![device.name, device.token, device.mac, device.host].some((v) => typeof v === 'string' && v.trim() !== '');
+}
+
 export const DEFAULT_POLL_INTERVAL = 15;
 export const MIN_POLL_INTERVAL = 5;

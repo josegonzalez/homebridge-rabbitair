@@ -141,6 +141,7 @@
     {
       "key": "devices",
       "type": "array",
+      "listItems": 0,
       "orderable": false,
       "buttonText": "Add Purifier",
       "items": [

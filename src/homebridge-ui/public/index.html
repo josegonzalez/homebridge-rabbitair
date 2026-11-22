@@ -70,6 +70,9 @@
       return node;
     };
     const normalizeMac = (mac) => String(mac || '').replace(/[^0-9a-fA-F]/g, '').toUpperCase();
+    // An entry with none of these set is an empty row, such as the one the
+    // settings form adds to an empty list. It only holds the form's defaults.
+    const isBlankDevice = (d) => !d || !['name', 'token', 'mac', 'host'].some((k) => typeof d[k] === 'string' && d[k].trim() !== '');
 
     let discovered = [];
 
@@ -78,8 +81,19 @@
       if (blocks.length === 0) {
         blocks.push({ platform: PLATFORM, name: 'Rabbit Air', devices: [] });
       }
-      blocks[0].devices = blocks[0].devices || [];
+      blocks[0].devices = (blocks[0].devices || []).filter((d) => !isBlankDevice(d));
       return blocks;
+    }
+
+    // Removes empty rows left in the saved configuration. The change is saved
+    // with the next "Save", or right away when a purifier is set up.
+    async function dropBlankDevices() {
+      const blocks = await homebridge.getPluginConfig();
+      const devices = (blocks[0] && blocks[0].devices) || [];
+      if (devices.some(isBlankDevice)) {
+        blocks[0].devices = devices.filter((d) => !isBlankDevice(d));
+        await homebridge.updatePluginConfig(blocks);
+      }
     }
 
     async function saveDevice(device) {
@@ -190,7 +204,13 @@
             homebridge.hideSpinner();
           }
         });
-        const status = found ? ['On the network', 'bg-success'] : discovered.length ? ['Not found', 'bg-secondary'] : ['Saved', 'bg-secondary'];
+        const status = !device.token
+          ? ['Missing user key', 'bg-danger']
+          : found
+            ? ['On the network', 'bg-success']
+            : discovered.length
+              ? ['Not found', 'bg-secondary']
+              : ['Saved', 'bg-secondary'];
         list.append(
           card({
             title: device.name || '(unnamed)',
@@ -246,6 +266,7 @@
       }
     });
 
+    await dropBlankDevices();
     await render();
     homebridge.showSchemaForm();
   })();
