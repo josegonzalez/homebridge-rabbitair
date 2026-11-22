@@ -1,10 +1,12 @@
 name: Release
 
-# Publishes to npm when a GitHub release is published. Homebridge installs and
-# updates plugins from npmjs.com, so the npm dist-tag decides who gets a
-# version: stable releases go to "latest", which the Homebridge UI offers as an
-# update, and pre-releases (for example v1.2.0-beta.1) go to "beta", which users
-# can pick from the plugin's version list in the Homebridge UI.
+# Run this from the Actions tab ("Run workflow" on main) and pick patch, minor
+# or major. The workflow bumps the version with `npm version`, publishes it to
+# npm, and only then commits the bump to main, tags it and creates the GitHub
+# release. A failed publish leaves no commit, tag or release behind.
+#
+# Homebridge installs and updates plugins from npmjs.com. Releases go to the
+# npm "latest" dist-tag, which the Homebridge UI offers as an update.
 #
 # Security:
 # - npm trusted publishing (OIDC): no npm token exists anywhere. npm only
@@ -12,6 +14,8 @@ name: Release
 #   environment, and attaches a signed provenance statement.
 # - Only the publish job can mint an OIDC token, and it runs no project code:
 #   it publishes the tarball the build job made, after checking its checksum.
+# - Only the final job can write to the repository, and it runs after the
+#   publish succeeded.
 # - Dependencies are installed from the lockfile with install scripts disabled,
 #   and no dependency cache is used, so a poisoned cache cannot reach a release.
 # - Actions are pinned to full commit SHAs.
@@ -19,8 +23,16 @@ name: Release
 # One-time setup is described in RELEASING.md.
 
 on:
-  release:
-    types: [published]
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: Which part of the version to bump
+        type: choice
+        required: true
+        options:
+          - patch
+          - minor
+          - major
 
 permissions:
   contents: read
@@ -31,12 +43,14 @@ concurrency:
 
 jobs:
   ci:
+    if: github.ref == 'refs/heads/main'
     uses: ./.github/workflows/ci.yml
 
   build:
     needs: ci
     runs-on: ubuntu-latest
     outputs:
+      version: ${{ steps.version.outputs.version }}
       dist-tag: ${{ steps.version.outputs.dist-tag }}
       tarball: ${{ steps.pack.outputs.tarball }}
       sha256: ${{ steps.pack.outputs.sha256 }}
@@ -44,36 +58,39 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          fetch-tags: true
+          fetch-depth: 0
 
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 24
           package-manager-cache: false
 
-      - name: Check the release tag matches package.json
+      - name: Bump the version
         id: version
         env:
-          TAG: ${{ github.event.release.tag_name }}
-          PRERELEASE: ${{ github.event.release.prerelease }}
+          BUMP: ${{ inputs.bump }}
         run: |
+          name="$(node -p 'require("./package.json").name')"
+          current="$(node -p 'require("./package.json").version')"
+          npm version "$BUMP" --no-git-tag-version --ignore-scripts > /dev/null
           version="$(node -p 'require("./package.json").version')"
-          if [ "${TAG#v}" != "$version" ]; then
-            echo "::error::release tag $TAG does not match package.json version $version"
+          if git rev-parse -q --verify "refs/tags/v$version" > /dev/null; then
+            echo "::error::tag v$version already exists"
+            exit 1
+          fi
+          published="$(npm view "$name@$version" version 2> /dev/null || true)"
+          if [ -n "$published" ]; then
+            echo "::error::$name@$version is already on npm; set package.json on main to the latest released version"
             exit 1
           fi
           case "$version" in
             *-*) tag=beta ;;
             *) tag=latest ;;
           esac
-          if [ "$PRERELEASE" = "true" ] && [ "$tag" = "latest" ]; then
-            echo "::error::a pre-release needs a pre-release version such as $version-beta.1"
-            exit 1
-          fi
-          if [ "$PRERELEASE" != "true" ] && [ "$tag" = "beta" ]; then
-            echo "::error::version $version is a pre-release; mark the GitHub release as a pre-release"
-            exit 1
-          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "dist-tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "Releasing $name $current → $version ($BUMP) to the \`$tag\` dist-tag" >> "$GITHUB_STEP_SUMMARY"
 
       - run: npm ci --ignore-scripts
 
@@ -124,8 +141,7 @@ jobs:
         env:
           TARBALL: ${{ needs.build.outputs.tarball }}
           SHA256: ${{ needs.build.outputs.sha256 }}
-        run: |
-          echo "$SHA256  $TARBALL" | sha256sum --check --strict
+        run: echo "$SHA256  $TARBALL" | sha256sum --check --strict
 
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
@@ -142,19 +158,62 @@ jobs:
           DIST_TAG: ${{ needs.build.outputs.dist-tag }}
         run: npm publish "./$TARBALL" --access public --provenance --tag "$DIST_TAG" --ignore-scripts
 
-  attach:
+  commit-and-release:
     needs: [build, publish]
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
+      # Credentials are kept only in this job, which pushes the release commit.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          package-manager-cache: false
+
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: package
+          path: ${{ runner.temp }}/package
 
-      - name: Attach the published tarball and checksum to the release
+      - name: Commit the version bump and tag it
+        env:
+          VERSION: ${{ needs.build.outputs.version }}
+        run: |
+          npm version "$VERSION" --no-git-tag-version --ignore-scripts > /dev/null
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit --quiet --message "chore: release $VERSION" package.json package-lock.json
+          git tag --annotate "v$VERSION" --message "v$VERSION"
+          git push origin "v$VERSION"
+
+      - name: Create the GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: ${{ github.event.release.tag_name }}
+          VERSION: ${{ needs.build.outputs.version }}
+          DIST_TAG: ${{ needs.build.outputs.dist-tag }}
           TARBALL: ${{ needs.build.outputs.tarball }}
-        run: gh release upload "$TAG" "$TARBALL" "$TARBALL.sha256" --repo "$GITHUB_REPOSITORY" --clobber
+        run: |
+          flags=()
+          if [ "$DIST_TAG" = "beta" ]; then
+            flags+=(--prerelease)
+          fi
+          gh release create "v$VERSION" \
+            "$RUNNER_TEMP/package/$TARBALL" "$RUNNER_TEMP/package/$TARBALL.sha256" \
+            --repo "$GITHUB_REPOSITORY" \
+            --verify-tag \
+            --title "v$VERSION" \
+            --generate-notes \
+            "${flags[@]}"
+
+      # Last, because the version is already published and tagged by now. If
+      # main moved during the release, merge the tag into main by hand.
+      - name: Push the version bump to main
+        env:
+          VERSION: ${{ needs.build.outputs.version }}
+        run: |
+          if ! git push origin "HEAD:refs/heads/main"; then
+            echo "::error::v$VERSION is published and tagged, but main could not be updated. Run: git fetch --tags && git merge v$VERSION && git push"
+            exit 1
+          fi
