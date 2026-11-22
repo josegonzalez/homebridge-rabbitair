@@ -57,6 +57,9 @@
 
 <script>
   (async () => {
+    // Show the settings form first, so nothing below can keep it hidden.
+    homebridge.showSchemaForm();
+
     const PLATFORM = 'RabbitAirLocal';
     const $ = (id) => document.getElementById(id);
     const el = (tag, attrs = {}, ...children) => {
@@ -266,8 +269,17 @@
       }
     });
 
-    await dropBlankDevices();
-    await render();
-    homebridge.showSchemaForm();
+    try {
+      // The Homebridge UI only renders the settings form once the plugin has a
+      // config block, so create one on a fresh install.
+      if ((await homebridge.getPluginConfig()).length === 0) {
+        await homebridge.updatePluginConfig(await loadConfig());
+      }
+      await dropBlankDevices();
+      await render();
+    } catch (err) {
+      $('ra-status').textContent = `The settings page could not load: ${(err && err.message) || err}`;
+    }
+    homebridge.fixScrollHeight();
   })();
 </script>
