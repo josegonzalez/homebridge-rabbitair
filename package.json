@@ -54,7 +54,8 @@
     "test": "npm run build && node --test \"dist/**/*.test.js\"",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "prepare": "node scripts/build.mjs",
-    "prepublishOnly": "npm test"
+    "prepublishOnly": "npm test",
+    "dev:ui": "npm run build && node scripts/dev-ui.mjs"
   },
   "devDependencies": {
     "@homebridge/hap-nodejs": "^2.3.0",

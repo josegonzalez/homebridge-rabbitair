@@ -165,14 +165,13 @@ npm test
 
 Tests use Node's built-in test runner against an emulated purifier and the real HomeKit (HAP) classes. See [RELEASING.md](RELEASING.md) for how releases are published.
 
-To try a working copy in a separate, throwaway Homebridge instance without installing it, point Homebridge at a plugin folder that links to the checkout:
+To try a working copy, including its settings page, in a throwaway Homebridge with the Homebridge UI:
 
 ```shell
-mkdir -p ~/.homebridge-dev/plugins/@josediazgonzalez
-ln -s "$PWD" ~/.homebridge-dev/plugins/@josediazgonzalez/homebridge-rabbitair
-# add a config.json with a RabbitAirLocal platform to ~/.homebridge-dev, then:
-npx homebridge -D -U ~/.homebridge-dev -P ~/.homebridge-dev/plugins --strict-plugin-resolution
+npm run dev:ui
 ```
+
+It installs Homebridge and the Homebridge UI into `tmp/dev-homebridge` (outside the plugin's own dependencies), links this checkout as a plugin, and starts both. The UI only listens on `127.0.0.1` and keeps its login: on first start, open the printed URL and create an admin account. Set the plugin up through its settings page like a user would. The configuration and the UI account are kept between runs; delete `tmp/dev-homebridge` to start over. Restarting Homebridge from the UI does not work in this setup, so stop and rerun the script instead. Set `DEV_UI_PORT` to use another port than 8592.
 
 ## License
 
