@@ -1,7 +1,7 @@
 {
   "name": "@josediazgonzalez/homebridge-rabbitair",
   "displayName": "Rabbit Air",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Homebridge plugin and standalone SDK for Rabbit Air air purifiers over the local network",
   "license": "Apache-2.0",
   "author": "Jose Diaz-Gonzalez",
